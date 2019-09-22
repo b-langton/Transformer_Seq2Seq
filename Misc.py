@@ -2,6 +2,7 @@ import torch
 from torch import nn, optim
 import torch.nn.functional as F
 import numpy as np
+from torch.autograd import Variable
 
 class LayerNorm(nn.Module):
     def __init__(self, d_model, eps = 1e-6):
@@ -10,14 +11,14 @@ class LayerNorm(nn.Module):
         self.size = d_model
         
         # create two learnable parameters to calibrate normalisation
-        self.alpha = nn.Parameter(torch.ones(self.size))
-        self.bias = nn.Parameter(torch.zeros(self.size))
+        self.a = nn.Parameter(torch.ones(self.size))
+        self.b = nn.Parameter(torch.zeros(self.size))
         
-        self.eps = eps
+        self.e = eps
     
     def forward(self, x):
-        norm = self.alpha * (x - x.mean(dim=-1, keepdim=True)) \
-        / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
+        norm = self.a * (x - x.mean(dim=-1, keepdim=True)) \
+        / (x.std(dim=-1, keepdim=True) + self.e) + self.b
         return norm
     
 class PosEnc(nn.Module):
@@ -37,3 +38,21 @@ class PosEnc(nn.Module):
         ##returns positional encodings for everything in the batch
         print(i.size(0) for i in x)
         return torch.cat([self.weight[:, :i.size(0), :] for i in x], 0)
+    
+def nopeak_mask(n, opt):
+    mask = np.triu(np.ones((1, n, n)),
+    k=1).astype('uint8')
+    mask =  Variable(torch.from_numpy(mask) == 0)
+    return mask
+
+def create_masks(src, trg, opt):
+    src_mask = (src != opt.src_pad).unsqueeze(-2)
+    if trg is not None:
+        trg_mask = (trg != opt.trg_pad).unsqueeze(-2)
+        size = trg.size(1) # get seq_len for matrix
+        np_mask = nopeak_mask(size, opt)
+        trg_mask = trg_mask & np_mask
+        
+    else:
+        trg_mask = None
+    return src_mask, trg_mask

@@ -11,30 +11,29 @@ class DecoderBlock(nn.Module):
                  d_ff=2048, dropout=0.1):
         super().__init__()
         self.n_heads = d_model//d_feature
-        self.masked_attn_head = MultiHeadAttention(d_model, d_feature, dropout)
-        self.attn_head = MultiHeadAttention(d_model, d_feature, dropout)
-        self.position_wise_feed_forward = nn.Sequential(
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
+        self.norm3 = LayerNorm(d_model)
+        self.masked_attn = MultiHeadAttention(d_model, d_feature, dropout)
+        self.attn = MultiHeadAttention(d_model, d_feature, dropout)
+        self.position_wise_ff = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.ReLU(),
             nn.Linear(d_ff, d_model),
         )
- 
-        self.layer_norm1 = LayerNorm(d_model)
-        self.layer_norm2 = LayerNorm(d_model)
-        self.layer_norm3 = LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
          
     def forward(self, x, enc_out, 
                 src_mask=None, tgt_mask=None):
         #apply masked attention with decoder inputs as keys, values, and queries
-        att = self.masked_attn_head(x, x, x, mask=src_mask)
+        att = self.masked_attn(x, x, x, mask=src_mask)
         #residual connection
-        x = x + self.dropout(self.layer_norm1(att))
+        x += self.dropout(self.norm1(att))
         #apply masked attention with decoder inputs as queries and encoder outputs as keys and values
-        att = self.attn_head(queries=x, keys=enc_out, values=enc_out, mask=tgt_mask)
-        x = x + self.dropout(self.layer_norm2(att))
-        pos = self.position_wise_feed_forward(x)
-        x = x + self.dropout(self.layer_norm2(pos))
+        att = self.attn(queries=x, keys=enc_out, values=enc_out, mask=tgt_mask)
+        x += self.dropout(self.norm2(att))
+        pos = self.position_wise_ff(x)
+        x += self.dropout(self.norm3(pos))
         return x
     
 class Decoder(nn.Module):

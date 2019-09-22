@@ -8,22 +8,23 @@ class EncoderBlock(nn.Module):
     def __init__(self, d_model=512, d_feature=64,
                  d_ff=2048, dropout=0.1):
         super().__init__()
-        self.attn_head = MultiHeadAttention(d_model, d_feature,dropout)
-        self.layer_norm1 = LayerNorm(d_model)
+        self.attn = MultiHeadAttention(d_model, d_feature,dropout)
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
-        self.position_wise_feed_forward = nn.Sequential(
+        self.position_wise_ff = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.ReLU(),
             nn.Linear(d_ff, d_model),
         )
-        self.layer_norm2 = LayerNorm(d_model)
+       
          
     def forward(self, x, mask=None):
-        att = self.attn_head(x, x, x, mask=mask)
+        att = self.attn(x, x, x, mask=mask)
         #residual connection
-        x = x + self.dropout(self.layer_norm1(att))
-        pos = self.position_wise_feed_forward(x)
-        x = x + self.dropout(self.layer_norm2(pos))
+        x += self.dropout(self.norm1(att))
+        pos = self.position_wise_ff(x)
+        x += self.dropout(self.norm2(pos))
         return x
 
 class Encoder(nn.Module):
